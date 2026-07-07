@@ -401,7 +401,7 @@ class VideoWorker(QThread):
                     if self._stopped:
                         return
                     bbox = coord_list_cycle[idx % len(coord_list_cycle)]
-                    ori_frame = copy.deepcopy(frame_list_cycle[idx % len(frame_list_cycle)])
+                    ori_frame = frame_list_cycle[idx % len(frame_list_cycle)].copy()
                     x1, y1, x2, y2 = bbox
                     y2 = min(y2 + extra_margin, ori_frame.shape[0])
                     
@@ -410,20 +410,19 @@ class VideoWorker(QThread):
                     except:
                         continue
                     
-                    # Ghép khẩu hình bằng mask đã tính sẵn (cực nhanh, không chạy qua model FaceParsing nữa)
-                    combine_frame = get_image_blending(ori_frame, res_frame_resized, [x1, y1, x2, y2], mask_array, crop_box)
-                    
+                    # Tối ưu hóa GFPGAN: Chỉ chạy trên vùng mặt nhỏ (crop) thay vì toàn bộ ảnh lớn
                     if use_enhancer:
-                        _, _, restored_img = restorer.enhance(combine_frame, has_aligned=False, only_center_face=False, paste_back=True)
-                        combine_frame = restored_img
+                        _, _, res_frame_resized = restorer.enhance(res_frame_resized, has_aligned=False, only_center_face=True, paste_back=True)
                     
+                    # Ghép khẩu hình bằng mask đã tính sẵn
+                    combine_frame = get_image_blending(ori_frame, res_frame_resized, [x1, y1, x2, y2], mask_array, crop_box)
                     cv2.imwrite(f"{output_frames_dir}/{idx:08d}.png", combine_frame)
             else:
                 for idx, res_frame in enumerate(res_frame_list):
                     if self._stopped:
                         return
                     bbox = coord_list_cycle[idx % len(coord_list_cycle)]
-                    ori_frame = copy.deepcopy(frame_list_cycle[idx % len(frame_list_cycle)])
+                    ori_frame = frame_list_cycle[idx % len(frame_list_cycle)].copy()
                     x1, y1, x2, y2 = bbox
                     y2 = min(y2 + extra_margin, ori_frame.shape[0])
                     
@@ -432,13 +431,12 @@ class VideoWorker(QThread):
                     except:
                         continue
                     
+                    # Tối ưu hóa GFPGAN: Chỉ chạy trên vùng mặt nhỏ (crop) thay vì toàn bộ ảnh lớn
+                    if use_enhancer:
+                        _, _, res_frame_resized = restorer.enhance(res_frame_resized, has_aligned=False, only_center_face=True, paste_back=True)
+                    
                     # Trộn vùng miệng tái tạo với khung mặt gốc cho video động
                     combine_frame = get_image(ori_frame, res_frame_resized, [x1, y1, x2, y2], mode=parsing_mode, fp=fp)
-                    
-                    if use_enhancer:
-                        _, _, restored_img = restorer.enhance(combine_frame, has_aligned=False, only_center_face=False, paste_back=True)
-                        combine_frame = restored_img
-                    
                     cv2.imwrite(f"{output_frames_dir}/{idx:08d}.png", combine_frame)
 
             # ── Bước 8: Xuất video qua FFmpeg pipe trực tiếp ────────────────

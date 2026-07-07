@@ -479,6 +479,7 @@ class VideoWorker(QThread):
                 '-pix_fmt', 'yuv420p',
                 '-acodec', 'aac',
                 '-b:a', '192k',
+                '-movflags', '+faststart',
                 '-shortest',
                 final_output_path
             ]

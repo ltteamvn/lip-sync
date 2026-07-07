@@ -41,10 +41,11 @@ print("Downloading Stable Diffusion VAE weights...")
 hf_hub_download(repo_id="stabilityai/sd-vae-ft-mse", filename="config.json", local_dir=f"{models_dir}/sd-vae")
 hf_hub_download(repo_id="stabilityai/sd-vae-ft-mse", filename="diffusion_pytorch_model.bin", local_dir=f"{models_dir}/sd-vae")
 
-# 3. Download Whisper tiny weight
+# 3. Download Whisper tiny weight from HuggingFace (For transformers WhisperModel compatibility)
 print("Downloading Whisper tiny model...")
-whisper_url = "https://openaipublic.azureedge.net/main/whisper/models/65147644a518d12f04e32d6f3b26facc3f8dd46e5390956a9424a650c0ce22b9/tiny.pt"
-download_file_from_url(whisper_url, f"{models_dir}/whisper/tiny.pt")
+hf_hub_download(repo_id="openai/whisper-tiny", filename="config.json", local_dir=f"{models_dir}/whisper")
+hf_hub_download(repo_id="openai/whisper-tiny", filename="preprocessor_config.json", local_dir=f"{models_dir}/whisper")
+hf_hub_download(repo_id="openai/whisper-tiny", filename="pytorch_model.bin", local_dir=f"{models_dir}/whisper")
 
 # 4. Download DWPose weights
 print("Downloading DWPose weights...")

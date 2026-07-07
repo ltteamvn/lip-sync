@@ -104,17 +104,18 @@ lip-sync/
 
 ## 🤝 Đóng góp & Hỗ trợ
 
-Nếu ứng dụng hữu ích với bạn, hãy ủng hộ tác giả:
+Nếu ứng dụng hữu ích với bạn, hãy ủng hộ tác giả để tiếp tục phát triển:
 
 <div align="center">
 
 **💖 Donate qua Momo / VietQR**
 
-*(Quét mã QR trong thư mục `assets/`)*
+<img src="assets/qr.jpg" alt="QR Donate" width="220"/>
 
 **Liên hệ:** Zalo **0398029854** · GitHub [@ltteamvn](https://github.com/ltteamvn)
 
 </div>
+
 
 ---
 

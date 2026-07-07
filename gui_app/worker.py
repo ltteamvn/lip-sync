@@ -140,16 +140,8 @@ class VideoWorker(QThread):
             
             temp_frames_dir = None
             if src_type == "image":
-                self._log("🖼️ Đầu vào là ảnh tĩnh. Đang nhân bản thành các khung hình...")
-                temp_frames_dir = tempfile.mkdtemp(prefix="musetalk_frames_")
-                temp_dirs_to_clean.append(temp_frames_dir)
-                
-                num_frames = max(1, int(duration * 25))
-                self._log(f"   > Tạo ra {num_frames} khung hình cho video 25fps...")
-                for i in range(num_frames):
-                    dest_file = os.path.join(temp_frames_dir, f"{i:08d}.png")
-                    shutil.copy(source_path, dest_file)
-                video_input_path = temp_frames_dir
+                self._log("🖼️ Đầu vào là ảnh tĩnh. Sẽ bỏ qua bước nhân bản tệp để tăng tốc xử lý...")
+                video_input_path = source_path
             elif src_type == "video":
                 self._log("🎬 Đầu vào là video. Sẽ dùng trực tiếp các khung hình video gốc...")
                 video_input_path = source_path
@@ -266,7 +258,7 @@ class VideoWorker(QThread):
             
             # Đọc danh sách ảnh
             if src_type == "image":
-                input_img_list = sorted(glob.glob(os.path.join(video_input_path, '*.[jpJP][pnPN]*[gG]')))
+                input_img_list = [video_input_path]
             else: # Video
                 # Trích xuất khung hình từ video gốc sang thư mục tạm
                 video_temp_dir = tempfile.mkdtemp(prefix="musetalk_vid_frames_")
@@ -289,6 +281,11 @@ class VideoWorker(QThread):
                 if bbox != coord_placeholder:
                     valid_coords.append(bbox)
                     valid_frames.append(frame)
+
+            video_num = len(whisper_chunks)
+            if src_type == "image" and len(valid_coords) > 0:
+                valid_coords = valid_coords * video_num
+                valid_frames = valid_frames * video_num
 
             if len(valid_coords) == 0:
                 raise Exception("Không phát hiện được bất kỳ khuôn mặt nào trong ảnh/video chân dung đầu vào!")
@@ -388,30 +385,61 @@ class VideoWorker(QThread):
             
             parsing_mode = self.p.get('parsing_mode', 'jaw')
             
-            for idx, res_frame in enumerate(res_frame_list):
-                if self._stopped:
-                    return
-                
-                bbox = coord_list_cycle[idx % len(coord_list_cycle)]
-                ori_frame = copy.deepcopy(frame_list_cycle[idx % len(frame_list_cycle)])
+            if src_type == "image" and len(res_frame_list) > 0:
+                from musetalk.utils.blending import get_image_prepare_material, get_image_blending
+                bbox = coord_list_cycle[0]
+                ori_frame = frame_list_cycle[0]
                 x1, y1, x2, y2 = bbox
-                y2 = y2 + extra_margin
-                y2 = min(y2, ori_frame.shape[0])
+                y2 = min(y2 + extra_margin, ori_frame.shape[0])
                 
-                try:
-                    res_frame_resized = cv2.resize(res_frame.astype(np.uint8), (x2 - x1, y2 - y1))
-                except:
-                    continue
+                # Tính sẵn mask_array và crop_box duy nhất 1 lần cho ảnh tĩnh!
+                mask_array, crop_box = get_image_prepare_material(
+                    ori_frame, [x1, y1, x2, y2], upper_boundary_ratio=0.5, expand=1.5, fp=fp, mode=parsing_mode
+                )
                 
-                # Trộn vùng miệng tái tạo với khung mặt gốc
-                combine_frame = get_image(ori_frame, res_frame_resized, [x1, y1, x2, y2], mode=parsing_mode, fp=fp)
-                
-                # Làm nét bằng GFPGAN nếu được yêu cầu
-                if use_enhancer:
-                    _, _, restored_img = restorer.enhance(combine_frame, has_aligned=False, only_center_face=False, paste_back=True)
-                    combine_frame = restored_img
-                
-                cv2.imwrite(f"{output_frames_dir}/{idx:08d}.png", combine_frame)
+                for idx, res_frame in enumerate(res_frame_list):
+                    if self._stopped:
+                        return
+                    bbox = coord_list_cycle[idx % len(coord_list_cycle)]
+                    ori_frame = copy.deepcopy(frame_list_cycle[idx % len(frame_list_cycle)])
+                    x1, y1, x2, y2 = bbox
+                    y2 = min(y2 + extra_margin, ori_frame.shape[0])
+                    
+                    try:
+                        res_frame_resized = cv2.resize(res_frame.astype(np.uint8), (x2 - x1, y2 - y1))
+                    except:
+                        continue
+                    
+                    # Ghép khẩu hình bằng mask đã tính sẵn (cực nhanh, không chạy qua model FaceParsing nữa)
+                    combine_frame = get_image_blending(ori_frame, res_frame_resized, [x1, y1, x2, y2], mask_array, crop_box)
+                    
+                    if use_enhancer:
+                        _, _, restored_img = restorer.enhance(combine_frame, has_aligned=False, only_center_face=False, paste_back=True)
+                        combine_frame = restored_img
+                    
+                    cv2.imwrite(f"{output_frames_dir}/{idx:08d}.png", combine_frame)
+            else:
+                for idx, res_frame in enumerate(res_frame_list):
+                    if self._stopped:
+                        return
+                    bbox = coord_list_cycle[idx % len(coord_list_cycle)]
+                    ori_frame = copy.deepcopy(frame_list_cycle[idx % len(frame_list_cycle)])
+                    x1, y1, x2, y2 = bbox
+                    y2 = min(y2 + extra_margin, ori_frame.shape[0])
+                    
+                    try:
+                        res_frame_resized = cv2.resize(res_frame.astype(np.uint8), (x2 - x1, y2 - y1))
+                    except:
+                        continue
+                    
+                    # Trộn vùng miệng tái tạo với khung mặt gốc cho video động
+                    combine_frame = get_image(ori_frame, res_frame_resized, [x1, y1, x2, y2], mode=parsing_mode, fp=fp)
+                    
+                    if use_enhancer:
+                        _, _, restored_img = restorer.enhance(combine_frame, has_aligned=False, only_center_face=False, paste_back=True)
+                        combine_frame = restored_img
+                    
+                    cv2.imwrite(f"{output_frames_dir}/{idx:08d}.png", combine_frame)
 
             # ── Bước 8: Xuất video qua FFmpeg pipe trực tiếp ────────────────
             self._progress(95)

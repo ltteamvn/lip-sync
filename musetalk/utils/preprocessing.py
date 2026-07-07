@@ -11,7 +11,7 @@ import torch
 from tqdm import tqdm
 
 # initialize the face detection and alignment model
-device = "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu"
 fa = face_alignment.FaceAlignment(face_alignment.LandmarksType.TWO_D, flip_input=False, device=device)
 
 # marker if the bbox is not sufficient 

@@ -1,5 +1,5 @@
 # Models, weights, checkpoints
-models/
+/models/
 *.pth
 *.ckpt
 *.safetensors
@@ -54,7 +54,7 @@ ffmpeg/ffplay.exe
 gfpgan/weights/
 
 # Data folders
-data/
+/data/
 
 # Build artifacts
 dist/
